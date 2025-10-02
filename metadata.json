@@ -1,0 +1,7 @@
+{
+  "name": "SipTrack AI",
+  "description": "An intelligent application to track alcohol consumption, spending, and health impacts using AI-powered photo recognition to simplify logging.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
