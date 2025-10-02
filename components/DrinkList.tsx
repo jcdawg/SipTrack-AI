@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import type { DrinkLog } from '../types';
 import { TrashIcon } from './Icons';
 
@@ -27,7 +27,7 @@ const DrinkList: React.FC<DrinkListProps> = ({ logs, removeDrinkLog }) => {
                 {log.quantity}x {log.brand} {log.name}
               </p>
               <p className="text-sm text-slate-500">
-                {log.calories} kcal &bull; {log.abv}% ABV &bull; ${log.price.toFixed(2)} &bull; {new Date(log.date).toLocaleString()}
+                {(Number(log.calories) || 0)} kcal &bull; {(Number(log.abv) || 0)}% ABV &bull; $${(Number(log.price) || 0).toFixed(2)} &bull; {new Date(log.date).toLocaleString()}
               </p>
             </div>
             <button

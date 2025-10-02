@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDrinkImage } from '../services/geminiService';
 import type { DrinkLog } from '../types';
 import { CameraIcon, PlusIcon } from './Icons';
@@ -8,27 +8,59 @@ interface LogDrinkFormProps {
   addDrinkLog: (drink: Omit<DrinkLog, 'id' | 'date'>) => void;
 }
 
+// State now holds strings for better form UX, conversion to number happens on submit.
 const initialDrinkState = {
   brand: '',
   name: '',
-  volume: 0,
-  abv: 0,
-  calories: 0,
-  carbs: 0,
-  sugar: 0,
-  price: 0,
-  quantity: 1,
+  volume: '',
+  abv: '',
+  calories: '',
+  carbs: '',
+  sugar: '',
+  price: '',
+  quantity: '1',
+};
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]);
+    };
+    reader.onerror = (error) => reject(error);
+  });
 };
 
 const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
-  const [drink, setDrink] = React.useState(initialDrinkState);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [drink, setDrink] = useState(initialDrinkState);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setDrink(prev => ({ ...prev, [name]: parseFloat(value) >= 0 ? parseFloat(value) : value }));
+    const numericFields = ['volume', 'abv', 'calories', 'carbs', 'sugar', 'price', 'quantity'];
+
+    // For numeric fields, allow only valid numeric-style input (e.g., "123", "12.3", "")
+    if (numericFields.includes(name)) {
+        if (value === '' || /^[0-9]*\.?[0-9]*$/.test(value)) {
+            setDrink(prev => ({ ...prev, [name]: value }));
+        }
+    } else {
+        // For non-numeric fields, allow any text
+        setDrink(prev => ({ ...prev, [name]: value }));
+    }
   };
   
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,29 +70,64 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = async () => {
-        const base64String = (reader.result as string).split(',')[1];
-        const result = await analyzeDrinkImage(base64String, file.type);
-        setDrink(prev => ({...prev, ...result, quantity: 1}));
-      };
+      const base64String = await fileToBase64(file);
+      const result = await analyzeDrinkImage(base64String, file.type);
+      
+      if (!isMounted.current) return;
+
+      // Sanitize AI response and set state as strings
+      setDrink({
+        brand: String(result.brand || ''),
+        name: String(result.name || ''),
+        volume: String(Number(result.volume) || ''),
+        abv: String(Number(result.abv) || ''),
+        calories: String(Number(result.calories) || ''),
+        carbs: String(Number(result.carbs) || ''),
+        sugar: String(Number(result.sugar) || ''),
+        price: String(Number(result.price) || ''),
+        quantity: '1',
+      });
+
     } catch (err: any) {
-      setError(err.message || 'An unknown error occurred.');
+      if (isMounted.current) {
+        setError(err.message || 'An unknown error occurred while analyzing the image.');
+      }
     } finally {
-      setIsLoading(false);
-      // Reset file input value to allow re-uploading the same file
-      if(fileInputRef.current) fileInputRef.current.value = "";
+      if (isMounted.current) {
+        setIsLoading(false);
+        // Reset file input value to allow re-uploading the same file
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!drink.name || drink.quantity <= 0) {
+    
+    // Coerce state strings to numbers for validation and logging
+    const numericDrinkData = {
+        quantity: Number(drink.quantity) || 0,
+        price: Number(drink.price) || 0,
+        volume: Number(drink.volume) || 0,
+        abv: Number(drink.abv) || 0,
+        calories: Number(drink.calories) || 0,
+        carbs: Number(drink.carbs) || 0,
+        sugar: Number(drink.sugar) || 0,
+    };
+
+    if (!drink.name || numericDrinkData.quantity <= 0) {
       setError("Please fill in at least the drink name and a valid quantity.");
       return;
     }
-    addDrinkLog(drink);
+
+    addDrinkLog({
+        brand: drink.brand,
+        name: drink.name,
+        ...numericDrinkData
+    });
+
     setDrink(initialDrinkState);
     setError(null);
   };
@@ -89,11 +156,11 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
            <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600">Volume (ml)</label>
-              <input type="number" name="volume" value={drink.volume} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*\.?[0-9]*" inputMode="decimal" name="volume" value={drink.volume} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600">ABV (%)</label>
-              <input type="number" step="0.1" name="abv" value={drink.abv} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*\.?[0-9]*" inputMode="decimal" step="0.1" name="abv" value={drink.abv} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
           </div>
         </div>
@@ -103,26 +170,26 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600">Calories</label>
-              <input type="number" name="calories" value={drink.calories} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*" inputMode="numeric" name="calories" value={drink.calories} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-600">Carbs (g)</label>
-              <input type="number" name="carbs" value={drink.carbs} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*\.?[0-9]*" inputMode="decimal" name="carbs" value={drink.carbs} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
              <div>
               <label className="block text-sm font-medium text-slate-600">Sugar (g)</label>
-              <input type="number" name="sugar" value={drink.sugar} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*\.?[0-9]*" inputMode="decimal" name="sugar" value={drink.sugar} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600">Price ($)</label>
-              <input type="number" step="0.01" name="price" value={drink.price} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*\.?[0-9]*" inputMode="decimal" step="0.01" name="price" value={drink.price} onChange={handleChange} className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
             <div>
               {/* Fix: Corrected typo in closing label tag */}
               <label className="block text-sm font-medium text-slate-600">Quantity*</label>
-              <input type="number" name="quantity" min="1" value={drink.quantity} onChange={handleChange} required className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
+              <input type="text" pattern="[0-9]*" inputMode="numeric" name="quantity" min="1" value={drink.quantity} onChange={handleChange} required className="mt-1 block w-full bg-slate-50 border border-slate-300 rounded-md shadow-sm py-2 px-3 text-slate-900 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
           </div>
         </div>

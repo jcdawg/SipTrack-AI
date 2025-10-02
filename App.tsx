@@ -1,21 +1,48 @@
-import * as React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { DrinkLog } from './types';
 import LogDrinkForm from './components/LogDrinkForm';
 import Dashboard from './components/Dashboard';
 import DrinkList from './components/DrinkList';
 
 const App: React.FC = () => {
-  const [drinkLogs, setDrinkLogs] = React.useState<DrinkLog[]>(() => {
+  const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>(() => {
     try {
       const savedLogs = localStorage.getItem('drinkLogs');
-      return savedLogs ? JSON.parse(savedLogs) : [];
+      if (!savedLogs) return [];
+      
+      const parsedLogs: any[] = JSON.parse(savedLogs);
+
+      // Sanitize logs to ensure numeric fields are numbers and handle legacy data issues.
+      const sanitizedLogs = parsedLogs.map(log => {
+        // A simple check to filter out any potentially malformed log entries
+        if (!log || typeof log !== 'object' || !log.id) {
+          return null;
+        }
+        return {
+          id: String(log.id),
+          brand: String(log.brand ?? ''),
+          name: String(log.name ?? ''),
+          volume: Number(log.volume) || 0,
+          abv: Number(log.abv) || 0,
+          calories: Number(log.calories) || 0,
+          carbs: Number(log.carbs) || 0,
+          sugar: Number(log.sugar) || 0,
+          price: Number(log.price) || 0,
+          quantity: Number(log.quantity) || 1, // Default quantity to 1 if missing/invalid
+          date: String(log.date ?? new Date().toISOString()),
+        };
+      }).filter((log): log is DrinkLog => log !== null); // Filter out nulls and assert type
+
+      return sanitizedLogs;
     } catch (error) {
-      console.error("Could not parse drink logs from localStorage", error);
+      console.error("Could not parse or sanitize drink logs from localStorage", error);
+      // If parsing/sanitization fails, it's safer to start fresh to prevent app crashes.
+      localStorage.removeItem('drinkLogs'); 
       return [];
     }
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     localStorage.setItem('drinkLogs', JSON.stringify(drinkLogs));
   }, [drinkLogs]);
 

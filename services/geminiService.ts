@@ -33,7 +33,7 @@ export const analyzeDrinkImage = async (base64Image: string, mimeType: string) =
             },
           },
           {
-            text: `Analyze the image of this alcoholic beverage. Identify its brand, name, and estimate its nutritional information for a standard serving. Provide a reasonable price estimate in USD.`,
+            text: `Analyze the image of this alcoholic beverage. Identify its brand, name, and estimate its nutritional information for a standard serving. Provide a reasonable price estimate in USD. IMPORTANT: You must respond with only the JSON object, without any additional text or markdown formatting.`,
           },
         ],
       },
@@ -43,11 +43,33 @@ export const analyzeDrinkImage = async (base64Image: string, mimeType: string) =
       },
     });
 
-    const jsonText = response.text.trim();
-    const data = JSON.parse(jsonText);
-    return data;
-  } catch (error) {
+    let jsonText = response.text?.trim();
+
+    if (!jsonText) {
+      throw new Error("The AI model returned an empty response.");
+    }
+
+    // Clean up potential markdown formatting (e.g., ```json ... ```)
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.slice(7, -3).trim();
+    }
+
+    try {
+      const data = JSON.parse(jsonText);
+      return data;
+    } catch (parseError) {
+      console.error("Failed to parse JSON from AI response:", parseError);
+      console.error("Raw AI response text was:", jsonText);
+      throw new Error("The AI model returned an invalid format. Please try again.");
+    }
+
+  } catch (error: any) {
     console.error("Error analyzing drink image with Gemini:", error);
+    // Re-throw our more specific, user-friendly errors
+    if (error.message.startsWith("The AI model")) {
+        throw error;
+    }
+    // Fallback for other API errors
     throw new Error("Failed to analyze image. The AI model could not identify the drink.");
   }
 };

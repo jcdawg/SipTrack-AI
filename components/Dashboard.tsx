@@ -1,17 +1,19 @@
-import * as React from 'react';
+import React from 'react';
 import type { DrinkLog } from '../types';
 import SummaryCard from './SummaryCard';
 import { BeerIcon, MoneyIcon, CalorieIcon, WeightIcon } from './Icons';
+import SpendingChart from './SpendingChart';
+import HealthChart from './HealthChart';
 
 interface DashboardProps {
   logs: DrinkLog[];
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ logs }) => {
-  // Lifetime Totals for main display
-  const totalDrinks = logs.reduce((sum, log) => sum + log.quantity, 0);
-  const totalSpent = logs.reduce((sum, log) => sum + log.price * log.quantity, 0);
-  const totalCalories = logs.reduce((sum, log) => sum + log.calories * log.quantity, 0);
+  // Lifetime Totals for main display, now with defensive checks
+  const totalDrinks = logs.reduce((sum, log) => sum + (Number(log.quantity) || 0), 0);
+  const totalSpent = logs.reduce((sum, log) => sum + (Number(log.price) || 0) * (Number(log.quantity) || 0), 0);
+  const totalCalories = logs.reduce((sum, log) => sum + (Number(log.calories) || 0) * (Number(log.quantity) || 0), 0);
   const estimatedWeightGain = totalCalories / 3500; // 3500 calories ~ 1 lb of fat
 
   // Trend Calculation (Last 7 days vs. Previous 7 days)
@@ -21,9 +23,10 @@ const Dashboard: React.FC<DashboardProps> = ({ logs }) => {
       return logDate >= startDate && logDate < endDate;
     });
 
-    const drinks = filteredLogs.reduce((sum, log) => sum + log.quantity, 0);
-    const spent = filteredLogs.reduce((sum, log) => sum + log.price * log.quantity, 0);
-    const calories = filteredLogs.reduce((sum, log) => sum + log.calories * log.quantity, 0);
+    // Added defensive Number() checks to prevent crashes from bad data
+    const drinks = filteredLogs.reduce((sum, log) => sum + (Number(log.quantity) || 0), 0);
+    const spent = filteredLogs.reduce((sum, log) => sum + (Number(log.price) || 0) * (Number(log.quantity) || 0), 0);
+    const calories = filteredLogs.reduce((sum, log) => sum + (Number(log.calories) || 0) * (Number(log.quantity) || 0), 0);
     const weightGain = calories / 3500;
 
     return { drinks, spent, calories, weightGain };
@@ -77,16 +80,12 @@ const Dashboard: React.FC<DashboardProps> = ({ logs }) => {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <h3 className="text-xl font-semibold mb-4 text-slate-900">Spending Trend</h3>
-          <div className="w-full h-[300px] flex items-center justify-center bg-slate-100 rounded-lg">
-            <p className="text-slate-500">Chart is temporarily unavailable.</p>
-          </div>
+          <h3 className="text-xl font-semibold mb-2 text-slate-900">Spending Trend</h3>
+          <SpendingChart logs={logs} />
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <h3 className="text-xl font-semibold mb-4 text-slate-900">Health Impact</h3>
-           <div className="w-full h-[300px] flex items-center justify-center bg-slate-100 rounded-lg">
-            <p className="text-slate-500">Chart is temporarily unavailable.</p>
-          </div>
+          <h3 className="text-xl font-semibold mb-2 text-slate-900">Health Impact</h3>
+           <HealthChart logs={logs} />
         </div>
       </div>
     </div>
