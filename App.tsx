@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import type { DrinkLog } from './types';
+import type { DrinkLog, MoodEntry } from './types';
 import LogDrinkForm from './components/LogDrinkForm';
 import Dashboard from './components/Dashboard';
 import DrinkList from './components/DrinkList';
+import MoodTracker from './components/MoodTracker';
 
 const App: React.FC = () => {
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>(() => {
@@ -42,9 +43,42 @@ const App: React.FC = () => {
     }
   });
 
+  const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(() => {
+    try {
+      const savedMoods = localStorage.getItem('moodEntries');
+      if (!savedMoods) return [];
+      
+      const parsedMoods: any[] = JSON.parse(savedMoods);
+
+      // Sanitize mood entries
+      const sanitizedMoods = parsedMoods.map(mood => {
+        if (!mood || typeof mood !== 'object' || !mood.id) {
+          return null;
+        }
+        return {
+          id: String(mood.id),
+          date: String(mood.date ?? new Date().toISOString()),
+          mood: Number(mood.mood) || 3, // Default to neutral if invalid
+          notes: mood.notes ? String(mood.notes) : undefined,
+          tags: Array.isArray(mood.tags) ? mood.tags.map(String) : [],
+        };
+      }).filter((mood): mood is NonNullable<typeof mood> => mood !== null);
+
+      return sanitizedMoods;
+    } catch (error) {
+      console.error("Could not parse or sanitize mood entries from localStorage", error);
+      localStorage.removeItem('moodEntries');
+      return [];
+    }
+  });
+
   useEffect(() => {
     localStorage.setItem('drinkLogs', JSON.stringify(drinkLogs));
   }, [drinkLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('moodEntries', JSON.stringify(moodEntries));
+  }, [moodEntries]);
 
   const addDrinkLog = (drink: Omit<DrinkLog, 'id' | 'date'>) => {
     const newLog: DrinkLog = {
@@ -58,6 +92,31 @@ const App: React.FC = () => {
   const removeDrinkLog = (id: string) => {
     setDrinkLogs(prevLogs => prevLogs.filter(log => log.id !== id));
   };
+
+  const addMoodEntry = (mood: Omit<MoodEntry, 'id' | 'date'>) => {
+    const today = new Date().toDateString();
+    const existingMoodIndex = moodEntries.findIndex(
+      entry => new Date(entry.date).toDateString() === today
+    );
+
+    const newMoodEntry: MoodEntry = {
+      ...mood,
+      id: new Date().toISOString() + Math.random(),
+      date: new Date().toISOString(),
+    };
+
+    if (existingMoodIndex >= 0) {
+      // Update existing mood for today
+      setMoodEntries(prevMoods => 
+        prevMoods.map((entry, index) => 
+          index === existingMoodIndex ? newMoodEntry : entry
+        )
+      );
+    } else {
+      // Add new mood entry
+      setMoodEntries(prevMoods => [...prevMoods, newMoodEntry]);
+    }
+  };
   
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 p-4 sm:p-6 lg:p-8">
@@ -67,13 +126,16 @@ const App: React.FC = () => {
             SipTrack AI
           </h1>
           <p className="mt-2 text-lg text-slate-600">
-            Your Personal Alcohol Consumption & Spending Tracker
+            Your Personal Alcohol Consumption, Spending & Mood Tracker
           </p>
         </header>
 
         <main className="space-y-8">
-          <LogDrinkForm addDrinkLog={addDrinkLog} />
-          <Dashboard logs={drinkLogs} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <LogDrinkForm addDrinkLog={addDrinkLog} />
+            <MoodTracker moods={moodEntries} addMoodEntry={addMoodEntry} />
+          </div>
+          <Dashboard logs={drinkLogs} moods={moodEntries} />
           <DrinkList logs={drinkLogs} removeDrinkLog={removeDrinkLog} />
         </main>
         
