@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Fix: Per coding guidelines, initialize GoogleGenAI directly with the environment variable.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || 'dummy-key' });
 
 const drinkSchema = {
   type: Type.OBJECT,
@@ -21,6 +21,10 @@ const drinkSchema = {
 
 
 export const analyzeDrinkImage = async (base64Image: string, mimeType: string) => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("API key not configured. Please set GEMINI_API_KEY environment variable.");
+  }
+  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
