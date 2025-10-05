@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDrinkImage } from '../services/geminiService';
-import type { DrinkLog } from '../types';
+import type { DrinkLog, SavedDrink } from '../types';
 import { CameraIcon, PlusIcon } from './Icons';
 import Loader from './Loader';
 
 interface LogDrinkFormProps {
-  addDrinkLog: (drink: Omit<DrinkLog, 'id' | 'date'>) => void;
+  addDrinkLog: (drink: Omit<DrinkLog, 'id' | 'date'>, savedDrink?: SavedDrink) => void;
+  savedDrinks: SavedDrink[];
 }
 
 // State now holds strings for better form UX, conversion to number happens on submit.
@@ -33,10 +34,11 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
+const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog, savedDrinks }) => {
   const [drink, setDrink] = useState(initialDrinkState);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSavedDrinks, setShowSavedDrinks] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMounted = useRef(true);
 
@@ -103,10 +105,24 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
     }
   };
 
+  const handleSelectSavedDrink = (savedDrink: SavedDrink) => {
+    setDrink({
+      brand: '',
+      name: savedDrink.name,
+      volume: String(savedDrink.volume_ml),
+      abv: String(savedDrink.alcohol_percentage),
+      calories: String(savedDrink.calories),
+      carbs: '',
+      sugar: '',
+      price: String(savedDrink.cost),
+      quantity: '1',
+    });
+    setShowSavedDrinks(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Coerce state strings to numbers for validation and logging
+
     const numericDrinkData = {
         quantity: Number(drink.quantity) || 0,
         price: Number(drink.price) || 0,
@@ -141,6 +157,36 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog }) => {
       {isLoading && <Loader message="Analyzing Image..." />}
       <h2 className="text-2xl font-bold mb-4 text-slate-900">Log a Drink</h2>
       {error && <p className="bg-red-100 border border-red-400 text-red-700 p-3 rounded-lg mb-4">{error}</p>}
+
+      {savedDrinks.length > 0 && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setShowSavedDrinks(!showSavedDrinks)}
+            className="text-sm text-cyan-600 hover:text-cyan-700 font-medium underline"
+          >
+            {showSavedDrinks ? 'Hide' : 'Show'} Previously Added Drinks ({savedDrinks.length})
+          </button>
+
+          {showSavedDrinks && (
+            <div className="mt-3 max-h-48 overflow-y-auto space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+              {savedDrinks.map((savedDrink) => (
+                <button
+                  key={savedDrink.id}
+                  type="button"
+                  onClick={() => handleSelectSavedDrink(savedDrink)}
+                  className="w-full text-left p-3 bg-white hover:bg-cyan-50 border border-slate-200 hover:border-cyan-300 rounded-lg transition-colors duration-200"
+                >
+                  <div className="font-medium text-slate-900">{savedDrink.name}</div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {savedDrink.volume_ml}ml • {savedDrink.alcohol_percentage}% ABV • ${savedDrink.cost}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Column 1 */}

@@ -1,15 +1,35 @@
+export interface SavedDrink {
+  id: string;
+  user_id: string;
+  name: string;
+  type: string;
+  volume_ml: number;
+  alcohol_percentage: number;
+  calories: number;
+  cost: number;
+  image_url?: string;
+  created_at: string;
+  last_used_at: string;
+}
+
 export interface DrinkLog {
   id: string;
+  user_id: string;
+  drink_id?: string;
   brand: string;
   name: string;
-  volume: number; // in ml
-  abv: number; // percentage
+  type: string;
+  volume: number;
+  abv: number;
   calories: number;
   carbs: number;
   sugar: number;
   price: number;
   quantity: number;
   date: string;
+  mood_before?: string;
+  mood_after?: string;
+  notes?: string;
 }
 
 export type Period = 'daily' | 'weekly' | 'monthly';

@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import type { DrinkLog, MoodEntry } from './types';
+import type { DrinkLog, MoodEntry, SavedDrink } from './types';
 import LogDrinkForm from './components/LogDrinkForm';
 import Dashboard from './components/Dashboard';
 import DrinkList from './components/DrinkList';
 import MoodTracker from './components/MoodTracker';
+import { drinkService } from './services/drinkService';
+
+const MOCK_USER_ID = 'demo-user-123';
 
 const App: React.FC = () => {
+  const [savedDrinks, setSavedDrinks] = useState<SavedDrink[]>([]);
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>(() => {
     try {
       const savedLogs = localStorage.getItem('drinkLogs');
@@ -80,13 +84,47 @@ const App: React.FC = () => {
     localStorage.setItem('moodEntries', JSON.stringify(moodEntries));
   }, [moodEntries]);
 
-  const addDrinkLog = (drink: Omit<DrinkLog, 'id' | 'date'>) => {
+  useEffect(() => {
+    loadSavedDrinks();
+  }, []);
+
+  const loadSavedDrinks = async () => {
+    const drinks = await drinkService.getSavedDrinks(MOCK_USER_ID);
+    setSavedDrinks(drinks);
+  };
+
+  const addDrinkLog = async (drink: Omit<DrinkLog, 'id' | 'date'>) => {
     const newLog: DrinkLog = {
       ...drink,
       id: new Date().toISOString() + Math.random(),
       date: new Date().toISOString(),
+      user_id: MOCK_USER_ID,
+      type: drink.brand || 'unknown',
     };
     setDrinkLogs(prevLogs => [...prevLogs, newLog]);
+
+    const savedDrink = await drinkService.saveDrink({
+      user_id: MOCK_USER_ID,
+      name: drink.name,
+      type: drink.brand || 'unknown',
+      volume_ml: drink.volume,
+      alcohol_percentage: drink.abv,
+      calories: drink.calories,
+      cost: drink.price,
+    });
+
+    await drinkService.logDrink({
+      user_id: MOCK_USER_ID,
+      drink_id: savedDrink?.id,
+      name: drink.name,
+      type: drink.brand || 'unknown',
+      volume_ml: drink.volume,
+      alcohol_percentage: drink.abv,
+      calories: drink.calories,
+      cost: drink.price,
+    });
+
+    await loadSavedDrinks();
   };
 
   const removeDrinkLog = (id: string) => {
@@ -132,7 +170,7 @@ const App: React.FC = () => {
 
         <main className="space-y-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <LogDrinkForm addDrinkLog={addDrinkLog} />
+            <LogDrinkForm addDrinkLog={addDrinkLog} savedDrinks={savedDrinks} />
             <MoodTracker moods={moodEntries} addMoodEntry={addMoodEntry} />
           </div>
           <Dashboard logs={drinkLogs} moods={moodEntries} />
