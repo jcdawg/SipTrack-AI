@@ -38,6 +38,7 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog, savedDrinks })
   const [drink, setDrink] = useState(initialDrinkState);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showSavedDrinks, setShowSavedDrinks] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMounted = useRef(true);
@@ -120,10 +121,14 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog, savedDrinks })
     setShowSavedDrinks(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setIsLoading(true);
 
-    const numericDrinkData = {
+    try {
+      const numericDrinkData = {
         quantity: Number(drink.quantity) || 0,
         price: Number(drink.price) || 0,
         volume: Number(drink.volume) || 0,
@@ -131,21 +136,37 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog, savedDrinks })
         calories: Number(drink.calories) || 0,
         carbs: Number(drink.carbs) || 0,
         sugar: Number(drink.sugar) || 0,
-    };
+      };
 
-    if (!drink.name || numericDrinkData.quantity <= 0) {
-      setError("Please fill in at least the drink name and a valid quantity.");
-      return;
-    }
+      if (!drink.name || numericDrinkData.quantity <= 0) {
+        setError("Please fill in at least the drink name and a valid quantity.");
+        setIsLoading(false);
+        return;
+      }
 
-    addDrinkLog({
+      await addDrinkLog({
         brand: drink.brand,
         name: drink.name,
+        type: drink.brand || 'unknown',
         ...numericDrinkData
-    });
+      });
 
-    setDrink(initialDrinkState);
-    setError(null);
+      setDrink(initialDrinkState);
+      setSuccess(`Successfully added ${drink.name}!`);
+
+      setTimeout(() => {
+        if (isMounted.current) {
+          setSuccess(null);
+        }
+      }, 3000);
+    } catch (err: any) {
+      console.error('Error in handleSubmit:', err);
+      setError(err.message || 'Failed to add drink. Please try again.');
+    } finally {
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
+    }
   };
   
   const triggerFileInput = () => {
@@ -154,9 +175,10 @@ const LogDrinkForm: React.FC<LogDrinkFormProps> = ({ addDrinkLog, savedDrinks })
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-2xl relative overflow-hidden">
-      {isLoading && <Loader message="Analyzing Image..." />}
+      {isLoading && <Loader message={isLoading ? "Processing..." : "Analyzing Image..."} />}
       <h2 className="text-2xl font-bold mb-4 text-slate-900">Log a Drink</h2>
       {error && <p className="bg-red-100 border border-red-400 text-red-700 p-3 rounded-lg mb-4">{error}</p>}
+      {success && <p className="bg-green-100 border border-green-400 text-green-700 p-3 rounded-lg mb-4">{success}</p>}
 
       {savedDrinks.length > 0 && (
         <div className="mb-4">

@@ -18,9 +18,12 @@ export const drinkService = {
   },
 
   async saveDrink(drink: Omit<SavedDrink, 'id' | 'created_at' | 'last_used_at'>): Promise<SavedDrink | null> {
+    console.log('Attempting to save drink:', drink);
+
     const existingDrink = await this.findExistingDrink(drink.user_id, drink.name, drink.type);
 
     if (existingDrink) {
+      console.log('Found existing drink, updating last_used_at:', existingDrink.id);
       const { data, error } = await supabase
         .from('drinks')
         .update({ last_used_at: new Date().toISOString() })
@@ -30,12 +33,15 @@ export const drinkService = {
 
       if (error) {
         console.error('Error updating drink:', error);
-        return null;
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        throw new Error(`Failed to update drink: ${error.message}`);
       }
 
+      console.log('Successfully updated drink:', data);
       return data;
     }
 
+    console.log('Creating new drink...');
     const { data, error } = await supabase
       .from('drinks')
       .insert([drink])
@@ -44,9 +50,11 @@ export const drinkService = {
 
     if (error) {
       console.error('Error saving drink:', error);
-      return null;
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to save drink: ${error.message}`);
     }
 
+    console.log('Successfully created drink:', data);
     return data;
   },
 
@@ -81,18 +89,23 @@ export const drinkService = {
     notes?: string;
     logged_at?: string;
   }): Promise<boolean> {
-    const { error } = await supabase
+    console.log('Attempting to log drink:', log);
+
+    const { data, error } = await supabase
       .from('drink_logs')
       .insert([{
         ...log,
         logged_at: log.logged_at || new Date().toISOString()
-      }]);
+      }])
+      .select();
 
     if (error) {
       console.error('Error logging drink:', error);
-      return false;
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to log drink: ${error.message}`);
     }
 
+    console.log('Successfully logged drink:', data);
     return true;
   },
 

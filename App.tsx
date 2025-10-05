@@ -6,7 +6,7 @@ import DrinkList from './components/DrinkList';
 import MoodTracker from './components/MoodTracker';
 import { drinkService } from './services/drinkService';
 
-const MOCK_USER_ID = 'demo-user-123';
+const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 const App: React.FC = () => {
   const [savedDrinks, setSavedDrinks] = useState<SavedDrink[]>([]);
@@ -80,29 +80,44 @@ const App: React.FC = () => {
   };
 
   const addDrinkLog = async (drink: Omit<DrinkLog, 'id' | 'date'>) => {
-    const savedDrink = await drinkService.saveDrink({
-      user_id: MOCK_USER_ID,
-      name: drink.name,
-      type: drink.brand || 'unknown',
-      volume_ml: drink.volume,
-      alcohol_percentage: drink.abv,
-      calories: drink.calories,
-      cost: drink.price,
-    });
+    try {
+      console.log('addDrinkLog called with:', drink);
 
-    await drinkService.logDrink({
-      user_id: MOCK_USER_ID,
-      drink_id: savedDrink?.id,
-      name: drink.name,
-      type: drink.brand || 'unknown',
-      volume_ml: drink.volume,
-      alcohol_percentage: drink.abv,
-      calories: drink.calories,
-      cost: drink.price,
-    });
+      const drinkType = drink.brand || drink.type || 'unknown';
 
-    await loadSavedDrinks();
-    await loadDrinkLogs();
+      const savedDrink = await drinkService.saveDrink({
+        user_id: MOCK_USER_ID,
+        name: drink.name,
+        type: drinkType,
+        volume_ml: drink.volume || 0,
+        alcohol_percentage: drink.abv || 0,
+        calories: drink.calories || 0,
+        cost: drink.price || 0,
+      });
+
+      console.log('Saved drink result:', savedDrink);
+
+      const logResult = await drinkService.logDrink({
+        user_id: MOCK_USER_ID,
+        drink_id: savedDrink?.id,
+        name: drink.name,
+        type: drinkType,
+        volume_ml: drink.volume || 0,
+        alcohol_percentage: drink.abv || 0,
+        calories: drink.calories || 0,
+        cost: drink.price || 0,
+      });
+
+      console.log('Log drink result:', logResult);
+
+      await loadSavedDrinks();
+      await loadDrinkLogs();
+
+      console.log('Successfully added drink and refreshed data');
+    } catch (error) {
+      console.error('Error in addDrinkLog:', error);
+      throw error;
+    }
   };
 
   const removeDrinkLog = async (id: string) => {
