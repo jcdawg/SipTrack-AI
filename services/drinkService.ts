@@ -115,5 +115,19 @@ export const drinkService = {
     }
 
     return data || [];
+  },
+
+  async deleteDrinkLog(logId: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('drink_logs')
+      .delete()
+      .eq('id', logId);
+
+    if (error) {
+      console.error('Error deleting drink log:', error);
+      return false;
+    }
+
+    return true;
   }
 };

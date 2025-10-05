@@ -10,42 +10,7 @@ const MOCK_USER_ID = 'demo-user-123';
 
 const App: React.FC = () => {
   const [savedDrinks, setSavedDrinks] = useState<SavedDrink[]>([]);
-  const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>(() => {
-    try {
-      const savedLogs = localStorage.getItem('drinkLogs');
-      if (!savedLogs) return [];
-      
-      const parsedLogs: any[] = JSON.parse(savedLogs);
-
-      // Sanitize logs to ensure numeric fields are numbers and handle legacy data issues.
-      const sanitizedLogs = parsedLogs.map(log => {
-        // A simple check to filter out any potentially malformed log entries
-        if (!log || typeof log !== 'object' || !log.id) {
-          return null;
-        }
-        return {
-          id: String(log.id),
-          brand: String(log.brand ?? ''),
-          name: String(log.name ?? ''),
-          volume: Number(log.volume) || 0,
-          abv: Number(log.abv) || 0,
-          calories: Number(log.calories) || 0,
-          carbs: Number(log.carbs) || 0,
-          sugar: Number(log.sugar) || 0,
-          price: Number(log.price) || 0,
-          quantity: Number(log.quantity) || 1, // Default quantity to 1 if missing/invalid
-          date: String(log.date ?? new Date().toISOString()),
-        };
-      }).filter((log): log is DrinkLog => log !== null); // Filter out nulls and assert type
-
-      return sanitizedLogs;
-    } catch (error) {
-      console.error("Could not parse or sanitize drink logs from localStorage", error);
-      // If parsing/sanitization fails, it's safer to start fresh to prevent app crashes.
-      localStorage.removeItem('drinkLogs'); 
-      return [];
-    }
-  });
+  const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([]);
 
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(() => {
     try {
@@ -77,15 +42,12 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('drinkLogs', JSON.stringify(drinkLogs));
-  }, [drinkLogs]);
-
-  useEffect(() => {
     localStorage.setItem('moodEntries', JSON.stringify(moodEntries));
   }, [moodEntries]);
 
   useEffect(() => {
     loadSavedDrinks();
+    loadDrinkLogs();
   }, []);
 
   const loadSavedDrinks = async () => {
@@ -93,16 +55,31 @@ const App: React.FC = () => {
     setSavedDrinks(drinks);
   };
 
-  const addDrinkLog = async (drink: Omit<DrinkLog, 'id' | 'date'>) => {
-    const newLog: DrinkLog = {
-      ...drink,
-      id: new Date().toISOString() + Math.random(),
-      date: new Date().toISOString(),
-      user_id: MOCK_USER_ID,
-      type: drink.brand || 'unknown',
-    };
-    setDrinkLogs(prevLogs => [...prevLogs, newLog]);
+  const loadDrinkLogs = async () => {
+    const logs = await drinkService.getDrinkLogs(MOCK_USER_ID);
+    const mappedLogs: DrinkLog[] = logs.map(log => ({
+      id: log.id,
+      user_id: log.user_id,
+      drink_id: log.drink_id,
+      brand: log.type || '',
+      name: log.name,
+      type: log.type,
+      volume: log.volume_ml || 0,
+      abv: log.alcohol_percentage || 0,
+      calories: log.calories || 0,
+      carbs: 0,
+      sugar: 0,
+      price: log.cost || 0,
+      quantity: 1,
+      date: log.logged_at,
+      mood_before: log.mood_before,
+      mood_after: log.mood_after,
+      notes: log.notes,
+    }));
+    setDrinkLogs(mappedLogs);
+  };
 
+  const addDrinkLog = async (drink: Omit<DrinkLog, 'id' | 'date'>) => {
     const savedDrink = await drinkService.saveDrink({
       user_id: MOCK_USER_ID,
       name: drink.name,
@@ -125,10 +102,12 @@ const App: React.FC = () => {
     });
 
     await loadSavedDrinks();
+    await loadDrinkLogs();
   };
 
-  const removeDrinkLog = (id: string) => {
-    setDrinkLogs(prevLogs => prevLogs.filter(log => log.id !== id));
+  const removeDrinkLog = async (id: string) => {
+    await drinkService.deleteDrinkLog(id);
+    await loadDrinkLogs();
   };
 
   const addMoodEntry = (mood: Omit<MoodEntry, 'id' | 'date'>) => {

@@ -4,7 +4,7 @@ import { TrashIcon } from './Icons';
 
 interface DrinkListProps {
   logs: DrinkLog[];
-  removeDrinkLog: (id: string) => void;
+  removeDrinkLog: (id: string) => Promise<void>;
 }
 
 const DrinkList: React.FC<DrinkListProps> = ({ logs, removeDrinkLog }) => {
