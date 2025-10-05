@@ -5,49 +5,20 @@ import Dashboard from './components/Dashboard';
 import DrinkList from './components/DrinkList';
 import MoodTracker from './components/MoodTracker';
 import { drinkService } from './services/drinkService';
+import { moodService } from './services/moodService';
 
 const MOCK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 const App: React.FC = () => {
   const [savedDrinks, setSavedDrinks] = useState<SavedDrink[]>([]);
   const [drinkLogs, setDrinkLogs] = useState<DrinkLog[]>([]);
-
-  const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(() => {
-    try {
-      const savedMoods = localStorage.getItem('moodEntries');
-      if (!savedMoods) return [];
-      
-      const parsedMoods: any[] = JSON.parse(savedMoods);
-
-      // Sanitize mood entries
-      const sanitizedMoods = parsedMoods.map(mood => {
-        if (!mood || typeof mood !== 'object' || !mood.id) {
-          return null;
-        }
-        return {
-          id: String(mood.id),
-          date: String(mood.date ?? new Date().toISOString()),
-          mood: Number(mood.mood) || 3, // Default to neutral if invalid
-          notes: mood.notes ? String(mood.notes) : undefined,
-          tags: Array.isArray(mood.tags) ? mood.tags.map(String) : [],
-        };
-      }).filter((mood): mood is NonNullable<typeof mood> => mood !== null);
-
-      return sanitizedMoods;
-    } catch (error) {
-      console.error("Could not parse or sanitize mood entries from localStorage", error);
-      localStorage.removeItem('moodEntries');
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('moodEntries', JSON.stringify(moodEntries));
-  }, [moodEntries]);
+  const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
+  const [hasMigratedMoods, setHasMigratedMoods] = useState(false);
 
   useEffect(() => {
     loadSavedDrinks();
     loadDrinkLogs();
+    loadMoodEntries();
   }, []);
 
   const loadSavedDrinks = async () => {
@@ -77,6 +48,47 @@ const App: React.FC = () => {
       notes: log.notes,
     }));
     setDrinkLogs(mappedLogs);
+  };
+
+  const loadMoodEntries = async () => {
+    if (!hasMigratedMoods) {
+      await migrateLocalStorageMoods();
+      setHasMigratedMoods(true);
+    }
+    const moods = await moodService.getMoodEntries(MOCK_USER_ID);
+    setMoodEntries(moods);
+  };
+
+  const migrateLocalStorageMoods = async () => {
+    try {
+      const savedMoods = localStorage.getItem('moodEntries');
+      if (!savedMoods) return;
+
+      const parsedMoods: any[] = JSON.parse(savedMoods);
+      const sanitizedMoods = parsedMoods
+        .map(mood => {
+          if (!mood || typeof mood !== 'object' || !mood.id) {
+            return null;
+          }
+          return {
+            id: String(mood.id),
+            date: String(mood.date ?? new Date().toISOString()),
+            mood: Number(mood.mood) || 3,
+            notes: mood.notes ? String(mood.notes) : undefined,
+            tags: Array.isArray(mood.tags) ? mood.tags.map(String) : [],
+          };
+        })
+        .filter((mood): mood is MoodEntry => mood !== null);
+
+      if (sanitizedMoods.length > 0) {
+        await moodService.migrateMoodsFromLocalStorage(MOCK_USER_ID, sanitizedMoods);
+        localStorage.removeItem('moodEntries');
+        console.log('Successfully migrated moods from localStorage to Supabase');
+      }
+    } catch (error) {
+      console.error('Error migrating moods from localStorage:', error);
+      localStorage.removeItem('moodEntries');
+    }
   };
 
   const addDrinkLog = async (drink: Omit<DrinkLog, 'id' | 'date'>) => {
@@ -125,28 +137,18 @@ const App: React.FC = () => {
     await loadDrinkLogs();
   };
 
-  const addMoodEntry = (mood: Omit<MoodEntry, 'id' | 'date'>) => {
-    const today = new Date().toDateString();
-    const existingMoodIndex = moodEntries.findIndex(
-      entry => new Date(entry.date).toDateString() === today
-    );
-
-    const newMoodEntry: MoodEntry = {
-      ...mood,
-      id: new Date().toISOString() + Math.random(),
-      date: new Date().toISOString(),
-    };
-
-    if (existingMoodIndex >= 0) {
-      // Update existing mood for today
-      setMoodEntries(prevMoods => 
-        prevMoods.map((entry, index) => 
-          index === existingMoodIndex ? newMoodEntry : entry
-        )
-      );
-    } else {
-      // Add new mood entry
-      setMoodEntries(prevMoods => [...prevMoods, newMoodEntry]);
+  const addMoodEntry = async (mood: Omit<MoodEntry, 'id' | 'date'>) => {
+    try {
+      await moodService.saveMoodEntry({
+        user_id: MOCK_USER_ID,
+        mood: mood.mood,
+        notes: mood.notes,
+        tags: mood.tags,
+      });
+      await loadMoodEntries();
+    } catch (error) {
+      console.error('Error adding mood entry:', error);
+      throw error;
     }
   };
   

@@ -4,7 +4,7 @@ import { HeartIcon, PlusIcon } from './Icons';
 
 interface MoodTrackerProps {
   moods: MoodEntry[];
-  addMoodEntry: (mood: Omit<MoodEntry, 'id' | 'date'>) => void;
+  addMoodEntry: (mood: Omit<MoodEntry, 'id' | 'date'>) => Promise<void>;
 }
 
 const moodOptions = [
@@ -57,24 +57,28 @@ const MoodTracker: React.FC<MoodTrackerProps> = ({ moods, addMoodEntry }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedMood) {
       alert('Please select a mood level');
       return;
     }
 
-    addMoodEntry({
-      mood: selectedMood,
-      notes: notes.trim() || undefined,
-      tags: selectedTags,
-    });
+    try {
+      await addMoodEntry({
+        mood: selectedMood,
+        notes: notes.trim() || undefined,
+        tags: selectedTags,
+      });
 
-    // Reset form
-    setNotes('');
-    setSelectedTags([]);
-    setCustomTag('');
+      setNotes('');
+      setSelectedTags([]);
+      setCustomTag('');
+    } catch (error) {
+      console.error('Failed to save mood:', error);
+      alert('Failed to save mood. Please try again.');
+    }
   };
 
   const getMoodDescription = (mood: MoodLevel) => {
